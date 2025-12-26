@@ -1,28 +1,46 @@
-#openspec
-openspec
+# 依赖
+node_modules/
 
-#依赖
-node_modules
+# openspec
+openspec/
 
-#AI助手
-.claude
+# 构建产物
+dist/
+
+# IDE
+.vscode/
+
+# AI 助手/自动化工具
+.claude/
 AGENTS.md
 CLAUDE.md
 
-#后端缓存文件
-*.pyc
-
-##IDE配置
-.vscode
-
-#node
+# 锁文件（按你的要求：全部忽略）
 *.lock
+pnpm-lock.yaml
+yarn.lock
 bun.lock
+bun.lockb
+package-lock.json
 
-#前端编译
-dist
+# Python 锁文件（建议提交以保证可复现）
+!backend/uv.lock
 
-#python包信息
-nexttranslation_backend.egg-info
-backend_llm_log_test.out.txt
-backend_llm_log_test.err.txt
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 环境变量
+.env
+.env.*
+
+# 调试日志/临时文件
+backend_llm_log_test.*.txt
