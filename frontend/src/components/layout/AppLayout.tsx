@@ -6,9 +6,9 @@ import { useSettingsStore } from "../../stores/settings";
 import { cn } from "../../lib/utils";
 
 const navItems = [
-  { to: "/" as const, label: "简易翻译", icon: Languages },
-  { to: "/vibe" as const, label: "氛围翻译", icon: Sparkles },
-  { to: "/spec" as const, label: "规范翻译", icon: BookOpen },
+  { to: "/" as const, label: "Easy Translation", icon: Languages },
+  { to: "/vibe" as const, label: "Vibe Translation", icon: Sparkles },
+  { to: "/spec" as const, label: "Spec Translation", icon: BookOpen },
   { to: "/settings" as const, label: "设置", icon: Settings },
 ];
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.engines.registry import engine_registry
+from app.errors import ApiError
 
 router = APIRouter(prefix="/engines", tags=["engines"])
 
@@ -17,5 +18,5 @@ async def get_engine(engine_id: str):
     """获取指定引擎的详细信息"""
     engine_info = engine_registry.get_engine_info(engine_id)
     if engine_info is None:
-        return {"error": f"Engine '{engine_id}' not found"}
+        raise ApiError(404, "engine_not_found", f"引擎不存在：{engine_id}")
     return engine_info

@@ -21,7 +21,7 @@ import {
 import { useSettingsStore } from "../stores/settings";
 import { useTranslationStore } from "../stores/translation";
 import {
-  vibeTranslate,
+  vibeTranslateStream,
   type VibeTranslateRequest,
   type VibeTranslateResponse,
   type ScoredEngineResult,
@@ -49,12 +49,13 @@ export function VibeTranslation() {
   const [targetLang, setTargetLang] = useState("zh");
   const [intent, setIntent] = useState("");
   const [selectedEngineIds, setSelectedEngineIds] = useState<string[]>([]);
+  const [judgeEngineId, setJudgeEngineId] = useState<string>("auto");
   const [result, setResult] = useState<VibeTranslateResponse | null>(null);
 
   const enabledEngines = getEnabledEngines();
 
   const mutation = useMutation({
-    mutationFn: (request: VibeTranslateRequest) => {
+    mutationFn: async (request: VibeTranslateRequest) => {
       // 获取所选引擎的配置
       const engineConfigs: EngineConfig[] = selectedEngineIds
         .map((id) => {
@@ -76,14 +77,55 @@ export function VibeTranslation() {
         throw new Error("请至少选择一个翻译引擎");
       }
 
-      return vibeTranslate(request, engineConfigs);
+      const judgeEngine =
+        judgeEngineId === "auto"
+          ? null
+          : engines.find((e) => e.id === judgeEngineId) || null;
+      const judgeConfig: EngineConfig | undefined = judgeEngine
+        ? {
+            apiKey: judgeEngine.apiKey,
+            baseUrl: judgeEngine.baseUrl,
+            channel: judgeEngine.channel,
+            model: judgeEngine.model,
+          }
+        : undefined;
+
+      setResult({
+        source_lang: request.source_lang,
+        target_lang: request.target_lang,
+        intent: request.intent,
+        results: [],
+      });
+
+      return vibeTranslateStream(request, engineConfigs, judgeConfig, {
+        onPartial: (partial) => {
+          setResult((prev) => {
+            const base: VibeTranslateResponse = prev || {
+              source_lang: request.source_lang,
+              target_lang: request.target_lang,
+              intent: request.intent,
+              results: [],
+            };
+            const idx = base.results.findIndex((r) => r.engine_id === partial.engine_id);
+            const nextResults = [...base.results];
+            if (idx >= 0) nextResults[idx] = partial;
+            else nextResults.push(partial);
+            return { ...base, results: nextResults };
+          });
+        },
+        onFinal: (final) => {
+          setResult(final);
+        },
+      });
     },
     onSuccess: (data) => {
       setResult(data);
       if (data.best_result) {
+        const finalText =
+          data.synthesized_translation || data.best_result.translated_text;
         addToHistory({
           sourceText,
-          translatedText: data.best_result.translated_text,
+          translatedText: finalText,
           sourceLang: data.source_lang,
           targetLang: data.target_lang,
           engine: data.best_result.engine_id,
@@ -119,6 +161,17 @@ export function VibeTranslation() {
 
   const hasEngines = enabledEngines.length > 0;
   const hasSelectedEngines = selectedEngineIds.length > 0;
+  const topScoreEngineId = (() => {
+    if (!result?.results?.length) return null;
+    let best: { engineId: string; score: number } | null = null;
+    for (const r of result.results) {
+      if (!r.success || !r.score) continue;
+      if (!best || r.score.overall > best.score) {
+        best = { engineId: r.engine_id, score: r.score.overall };
+      }
+    }
+    return best?.engineId || null;
+  })();
 
   return (
     <div className="space-y-6">
@@ -234,6 +287,31 @@ export function VibeTranslation() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">裁判模型</CardTitle>
+              <CardDescription>
+                选择用于打分与综合生成“综合推荐”的引擎/模型
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select value={judgeEngineId} onValueChange={setJudgeEngineId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择裁判引擎" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">自动（优先 OpenAI）</SelectItem>
+                  {enabledEngines.map((engine) => (
+                    <SelectItem key={engine.id} value={engine.id}>
+                      {engine.name}
+                      {engine.model && ` (${engine.model})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
           <Button
             className="w-full"
             size="lg"
@@ -274,7 +352,7 @@ export function VibeTranslation() {
                 <div className="flex items-center space-x-2">
                   <Trophy className="h-5 w-5 text-green-600" />
                   <CardTitle className="text-base text-green-700 dark:text-green-300">
-                    最佳推荐
+                    综合推荐
                   </CardTitle>
                 </div>
               </CardHeader>
@@ -283,8 +361,18 @@ export function VibeTranslation() {
                   {result.best_result.engine_name}
                 </p>
                 <p className="whitespace-pre-wrap">
-                  {result.best_result.translated_text}
+                  {result.synthesized_translation || result.best_result.translated_text}
                 </p>
+                {result.best_result.score?.comment && (
+                  <p className="text-xs text-muted-foreground">
+                    评语：{result.best_result.score.comment}
+                  </p>
+                )}
+                {result.synthesis_rationale && (
+                  <p className="text-xs text-muted-foreground">
+                    综合说明：{result.synthesis_rationale}
+                  </p>
+                )}
                 {result.best_result.score && (
                   <div className="flex items-center space-x-4 text-sm">
                     <span className="flex items-center">
@@ -295,7 +383,10 @@ export function VibeTranslation() {
                       variant="ghost"
                       size="sm"
                       onClick={() =>
-                        handleCopy(result.best_result!.translated_text)
+                        handleCopy(
+                          result.synthesized_translation ||
+                            result.best_result!.translated_text
+                        )
                       }
                     >
                       <Copy className="h-3 w-3 mr-1" />
@@ -314,7 +405,7 @@ export function VibeTranslation() {
                 <ResultCard
                   key={r.engine_id}
                   result={r}
-                  isBest={r.engine_id === result.best_result?.engine_id}
+                  isTopScore={r.engine_id === topScoreEngineId}
                   onCopy={handleCopy}
                 />
               ))}
@@ -341,11 +432,11 @@ export function VibeTranslation() {
 
 function ResultCard({
   result,
-  isBest,
+  isTopScore,
   onCopy,
 }: {
   result: ScoredEngineResult;
-  isBest: boolean;
+  isTopScore: boolean;
   onCopy: (text: string) => void;
 }) {
   if (!result.success) {
@@ -362,16 +453,27 @@ function ResultCard({
   }
 
   return (
-    <Card className={cn(isBest && "ring-2 ring-green-500")}>
+    <Card
+      className={cn(
+        isTopScore && "border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
+      )}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">{result.engine_name}</CardTitle>
-          {result.score && (
-            <div className="flex items-center text-sm">
-              <Star className="h-4 w-4 text-yellow-500 mr-1" />
-              {result.score.overall.toFixed(1)}
-            </div>
-          )}
+          <div className="flex items-center space-x-2 text-sm">
+            {isTopScore && (
+              <span className="text-yellow-700 dark:text-yellow-300">
+                分数最高
+              </span>
+            )}
+            {result.score && (
+              <div className="flex items-center">
+                <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                {result.score.overall.toFixed(1)}
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -384,6 +486,12 @@ function ResultCard({
             <ScoreItem label="风格" value={result.score.style_match} />
             <ScoreItem label="术语" value={result.score.terminology} />
           </div>
+        )}
+
+        {result.score?.comment && (
+          <p className="text-xs text-muted-foreground">
+            评语：{result.score.comment}
+          </p>
         )}
 
         <div className="flex justify-end">

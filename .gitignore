@@ -21,3 +21,8 @@ bun.lock
 
 #前端编译
 dist
+
+#python包信息
+nexttranslation_backend.egg-info
+backend_llm_log_test.out.txt
+backend_llm_log_test.err.txt

@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 export type Theme = "light" | "dark";
 
 // 引擎渠道类型
-export type EngineChannel = "openai" | "anthropic" | "google" | "deepl";
+export type EngineChannel = "openai" | "anthropic";
 
 // 单个引擎实例配置
 export interface EngineInstance {
@@ -140,13 +140,5 @@ export const channelDefaults: Record<EngineChannel, { baseUrl: string; models: s
   anthropic: {
     baseUrl: "https://api.anthropic.com",
     models: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
-  },
-  google: {
-    baseUrl: "https://translation.googleapis.com",
-    models: [],
-  },
-  deepl: {
-    baseUrl: "https://api.deepl.com/v2",
-    models: [],
   },
 };

@@ -1,24 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // 引擎配置接口
 export interface EngineConfig {
   apiKey: string;
   baseUrl: string;
-  channel: "openai" | "anthropic" | "google" | "deepl";
+  channel: "openai" | "anthropic";
   model?: string;
 }
 
 interface RequestOptions extends RequestInit {
-  // 旧版：固定的 API 密钥对象
-  apiKeys?: {
-    openai?: string;
-    anthropic?: string;
-    google?: string;
-    deepl?: string;
-  };
-  // 新版：引擎配置
   engineConfig?: EngineConfig;
-  // 多引擎配置（用于 vibe 模式）
   engineConfigs?: EngineConfig[];
 }
 
@@ -46,22 +37,6 @@ class ApiClient {
       headers.set("X-Engine-Configs", JSON.stringify(options.engineConfigs));
     }
 
-    // 旧版兼容：添加 API 密钥头
-    if (options?.apiKeys) {
-      if (options.apiKeys.openai) {
-        headers.set("X-OpenAI-Key", options.apiKeys.openai);
-      }
-      if (options.apiKeys.anthropic) {
-        headers.set("X-Anthropic-Key", options.apiKeys.anthropic);
-      }
-      if (options.apiKeys.google) {
-        headers.set("X-Google-Key", options.apiKeys.google);
-      }
-      if (options.apiKeys.deepl) {
-        headers.set("X-DeepL-Key", options.apiKeys.deepl);
-      }
-    }
-
     return headers;
   }
 
@@ -76,7 +51,7 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+      throw new Error(extractErrorMessage(error, response.status));
     }
 
     return response.json();
@@ -100,3 +75,18 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
+
+function extractErrorMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === "object") {
+    const maybeRecord = payload as Record<string, unknown>;
+    const apiError = maybeRecord.error;
+    if (apiError && typeof apiError === "object") {
+      const apiErrorRecord = apiError as Record<string, unknown>;
+      const message = apiErrorRecord.message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+    const detail = maybeRecord.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+  }
+  return `HTTP error! status: ${status}`;
+}

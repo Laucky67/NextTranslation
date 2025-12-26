@@ -1,4 +1,4 @@
-import { apiClient, type EngineConfig } from "./client";
+import { apiClient, API_BASE_URL, type EngineConfig } from "./client";
 
 // 类型定义
 export interface EasyTranslateRequest {
@@ -123,6 +123,81 @@ export async function vibeTranslate(
   engineConfigs: EngineConfig[]
 ): Promise<VibeTranslateResponse> {
   return apiClient.post("/api/translate/vibe", request, { engineConfigs });
+}
+
+export async function vibeTranslateStream(
+  request: VibeTranslateRequest,
+  engineConfigs: EngineConfig[],
+  judgeConfig?: EngineConfig,
+  handlers: {
+    onPartial?: (result: ScoredEngineResult) => void;
+    onFinal?: (final: VibeTranslateResponse) => void;
+  } = {}
+): Promise<VibeTranslateResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Engine-Configs": JSON.stringify(engineConfigs),
+  };
+  if (judgeConfig) {
+    headers["X-Judge-Engine-Config"] = JSON.stringify(judgeConfig);
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/translate/vibe/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message =
+      (err?.error?.message as string | undefined) ||
+      (err?.detail as string | undefined) ||
+      `HTTP error! status: ${res.status}`;
+    throw new Error(message);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error("浏览器不支持流式读取");
+  }
+
+  let buffer = "";
+  let finalResponse: VibeTranslateResponse | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += new TextDecoder("utf-8").decode(value, { stream: true });
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+
+    for (const part of parts) {
+      const lines = part.split("\n");
+      let event = "";
+      let data = "";
+      for (const line of lines) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        if (line.startsWith("data:")) data = line.slice(5).trim();
+      }
+      if (!event || !data) continue;
+
+      if (event === "partial") {
+        const parsed = JSON.parse(data) as ScoredEngineResult;
+        handlers.onPartial?.(parsed);
+      } else if (event === "final") {
+        const parsed = JSON.parse(data) as VibeTranslateResponse;
+        finalResponse = parsed;
+        handlers.onFinal?.(parsed);
+      }
+    }
+  }
+
+  if (!finalResponse) {
+    throw new Error("未收到最终翻译结果");
+  }
+  return finalResponse;
 }
 
 export async function specTranslate(

@@ -29,8 +29,6 @@ import { cn } from "../lib/utils";
 const channelOptions: { value: EngineChannel; label: string; description: string }[] = [
   { value: "openai", label: "OpenAI 兼容", description: "支持 OpenAI API 格式的服务" },
   { value: "anthropic", label: "Anthropic 兼容", description: "支持 Anthropic API 格式的服务" },
-  { value: "google", label: "Google 翻译", description: "Google Cloud Translation API" },
-  { value: "deepl", label: "DeepL", description: "DeepL 翻译 API" },
 ];
 
 interface EngineFormData {
