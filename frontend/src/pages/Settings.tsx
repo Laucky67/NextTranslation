@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Combobox } from "../components/ui/combobox";
 import {
   useSettingsStore,
   channelDefaults,
@@ -435,31 +436,26 @@ function EngineForm({
       </div>
 
       <div className="space-y-2">
-        <Label>模型（可选）</Label>
+        <Label>模型</Label>
         {currentChannelDefaults.models.length > 0 ? (
-          <Select
+          <Combobox
+            options={currentChannelDefaults.models.map((m) => ({ value: m, label: m }))}
             value={formData.model}
-            onValueChange={(v) => setFormData((prev) => ({ ...prev, model: v }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择模型" />
-            </SelectTrigger>
-            <SelectContent>
-              {currentChannelDefaults.models.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(v) => setFormData((prev) => ({ ...prev, model: v }))}
+            placeholder="选择或输入模型名"
+            allowCustom={true}
+            customPlaceholder="输入自定义模型名..."
+          />
         ) : (
           <Input
-            placeholder="此渠道无需指定模型"
+            placeholder="输入模型名（可选）"
             value={formData.model}
             onChange={(e) => setFormData((prev) => ({ ...prev, model: e.target.value }))}
-            disabled={currentChannelDefaults.models.length === 0}
           />
         )}
+        <p className="text-xs text-muted-foreground">
+          可选择预设模型或输入自定义模型名
+        </p>
       </div>
     </div>
   );

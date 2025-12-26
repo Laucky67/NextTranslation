@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Copy, Loader2, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, Loader2, Info } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Switch } from "../components/ui/switch";
 import { Slider } from "../components/ui/slider";
 import { useSettingsStore } from "../stores/settings";
 import { useTranslationStore } from "../stores/translation";
@@ -28,7 +27,6 @@ import {
   type SpecTranslateRequest,
   type SpecTranslateResponse,
 } from "../api/translation";
-import { cn } from "../lib/utils";
 
 const languages = [
   { code: "auto", name: "自动检测" },
@@ -40,64 +38,62 @@ const languages = [
   { code: "de", name: "德语" },
 ];
 
-// 翻译理论配置
-interface TheoryConfig {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  promptPlaceholder: string;
-  extraFields?: {
-    type: "text" | "textarea";
-    key: string;
-    label: string;
-    placeholder: string;
-  }[];
-}
-
-const theoryDefinitions: Omit<TheoryConfig, "enabled">[] = [
+// 翻译理论定义
+const theoryDefinitions = [
   {
     id: "equivalence",
-    name: "对等理论 (Equivalence Theory)",
+    name: "对等理论",
+    englishName: "Equivalence Theory",
     description: "追求语义等值，优先传达原文的核心含义，保持信息对等",
-    promptPlaceholder: "例如：注重形式对等还是动态对等...",
+    fields: [
+      {
+        key: "equivalenceType",
+        label: "对等类型",
+        type: "select" as const,
+        options: [
+          { value: "formal", label: "形式对等 - 保持原文形式结构" },
+          { value: "dynamic", label: "动态对等 - 追求等效读者反应" },
+        ],
+        default: "dynamic",
+      },
+    ],
   },
   {
     id: "functionalism",
-    name: "功能主义 (Skopos Theory)",
+    name: "功能主义",
+    englishName: "Skopos Theory",
     description: "以翻译目的为导向，根据目标读者需求调整翻译策略",
-    promptPlaceholder: "例如：翻译目的是...",
-    extraFields: [
+    fields: [
       {
-        type: "text",
         key: "purpose",
         label: "翻译目的",
+        type: "text" as const,
         placeholder: "例如：用于学术发表、商业宣传、日常交流...",
       },
       {
-        type: "text",
         key: "targetAudience",
         label: "目标读者",
+        type: "text" as const,
         placeholder: "例如：专业人士、普通大众、儿童...",
       },
     ],
   },
   {
     id: "dts",
-    name: "描述翻译学 (DTS)",
+    name: "描述翻译学",
+    englishName: "Descriptive Translation Studies",
     description: "基于目标文化规范，参考已有译文，尊重译入语习惯",
-    promptPlaceholder: "例如：参考类似文本的翻译风格...",
-    extraFields: [
+    fields: [
       {
-        type: "textarea",
         key: "referenceSource",
         label: "参考原文",
+        type: "textarea" as const,
         placeholder: "粘贴类似风格的原文示例...",
       },
       {
-        type: "textarea",
         key: "referenceTranslation",
         label: "参考译文",
+        type: "textarea" as const,
         placeholder: "粘贴对应的译文示例...",
       },
     ],
@@ -106,26 +102,20 @@ const theoryDefinitions: Omit<TheoryConfig, "enabled">[] = [
 
 // 蓝图状态类型
 interface BlueprintState {
-  theories: {
-    [key: string]: {
-      enabled: boolean;
-      prompt: string;
-      extraData: { [key: string]: string };
-    };
-  };
-  methodSlider: number; // 0 = 直译, 100 = 意译
-  strategySlider: number; // 0 = 归化, 100 = 异化
+  selectedTheory: string;
+  theoryConfig: Record<string, string>;
+  methodValue: number; // 1-10, 1=直译, 10=意译
+  strategyValue: number; // 1-10, 1=归化, 10=异化
   context: string;
 }
 
 const defaultBlueprintState: BlueprintState = {
-  theories: {
-    equivalence: { enabled: true, prompt: "", extraData: {} },
-    functionalism: { enabled: false, prompt: "", extraData: {} },
-    dts: { enabled: false, prompt: "", extraData: {} },
+  selectedTheory: "equivalence",
+  theoryConfig: {
+    equivalenceType: "dynamic",
   },
-  methodSlider: 50,
-  strategySlider: 50,
+  methodValue: 5,
+  strategyValue: 5,
   context: "",
 };
 
@@ -141,12 +131,10 @@ export function SpecTranslation() {
   );
   const [blueprint, setBlueprint] = useState<BlueprintState>(defaultBlueprintState);
   const [result, setResult] = useState<SpecTranslateResponse | null>(null);
-  const [expandedTheories, setExpandedTheories] = useState<Set<string>>(
-    new Set(["equivalence"])
-  );
 
   const enabledEngines = getEnabledEngines();
   const selectedEngine = engines.find((e) => e.id === selectedEngineId);
+  const currentTheory = theoryDefinitions.find((t) => t.id === blueprint.selectedTheory);
 
   const mutation = useMutation({
     mutationFn: (request: SpecTranslateRequest) => {
@@ -174,14 +162,9 @@ export function SpecTranslation() {
   const handleTranslate = () => {
     if (!sourceText.trim()) return;
 
-    // 构建蓝图数据
-    const enabledTheories = Object.entries(blueprint.theories)
-      .filter(([, config]) => config.enabled)
-      .map(([id, config]) => ({
-        id,
-        prompt: config.prompt,
-        ...config.extraData,
-      }));
+    // 将滑块值转换为权重 (1-10 -> 0-1)
+    const methodWeight = (blueprint.methodValue - 1) / 9;
+    const strategyWeight = (blueprint.strategyValue - 1) / 9;
 
     mutation.mutate({
       text: sourceText,
@@ -189,17 +172,20 @@ export function SpecTranslation() {
       target_lang: targetLang,
       blueprint: {
         theory: {
-          primary: enabledTheories[0]?.id || "equivalence",
-          emphasis: enabledTheories.map((t) => t.id),
-          configs: enabledTheories,
+          primary: blueprint.selectedTheory,
+          emphasis: [blueprint.selectedTheory],
+          configs: [{
+            id: blueprint.selectedTheory,
+            ...blueprint.theoryConfig,
+          }],
         },
         method: {
-          preference: blueprint.methodSlider < 33 ? "literal" : blueprint.methodSlider > 66 ? "free" : "balanced",
-          weight: blueprint.methodSlider / 100,
+          preference: blueprint.methodValue <= 3 ? "literal" : blueprint.methodValue >= 7 ? "free" : "balanced",
+          weight: methodWeight,
         },
         strategy: {
-          approach: blueprint.strategySlider < 50 ? "domestication" : "foreignization",
-          weight: Math.abs(blueprint.strategySlider - 50) / 50,
+          approach: blueprint.strategyValue <= 5 ? "domestication" : "foreignization",
+          weight: Math.abs(strategyWeight - 0.5) * 2,
         },
         techniques: { useTerminology: false, extractTerms: false },
         context: blueprint.context,
@@ -212,49 +198,42 @@ export function SpecTranslation() {
     await navigator.clipboard.writeText(text);
   };
 
-  const toggleTheoryExpand = (theoryId: string) => {
-    setExpandedTheories((prev) => {
-      const next = new Set(prev);
-      if (next.has(theoryId)) {
-        next.delete(theoryId);
-      } else {
-        next.add(theoryId);
+  const handleTheoryChange = (theoryId: string) => {
+    const theory = theoryDefinitions.find((t) => t.id === theoryId);
+    const defaultConfig: Record<string, string> = {};
+    theory?.fields.forEach((field) => {
+      if ("default" in field) {
+        defaultConfig[field.key] = field.default;
       }
-      return next;
     });
-  };
-
-  const updateTheory = (
-    theoryId: string,
-    updates: Partial<BlueprintState["theories"][string]>
-  ) => {
     setBlueprint((prev) => ({
       ...prev,
-      theories: {
-        ...prev.theories,
-        [theoryId]: { ...prev.theories[theoryId], ...updates },
-      },
+      selectedTheory: theoryId,
+      theoryConfig: defaultConfig,
     }));
   };
 
-  const updateTheoryExtraData = (
-    theoryId: string,
-    key: string,
-    value: string
-  ) => {
+  const updateTheoryConfig = (key: string, value: string) => {
     setBlueprint((prev) => ({
       ...prev,
-      theories: {
-        ...prev.theories,
-        [theoryId]: {
-          ...prev.theories[theoryId],
-          extraData: { ...prev.theories[theoryId].extraData, [key]: value },
-        },
-      },
+      theoryConfig: { ...prev.theoryConfig, [key]: value },
     }));
   };
 
   const hasEngine = enabledEngines.length > 0;
+
+  // 获取方法和策略的描述文本
+  const getMethodDescription = (value: number) => {
+    if (value <= 3) return "偏向直译：尽量保持原文形式和结构";
+    if (value >= 7) return "偏向意译：灵活处理，重视意义传达";
+    return "平衡模式：兼顾形式与意义";
+  };
+
+  const getStrategyDescription = (value: number) => {
+    if (value <= 3) return "偏向归化：使译文贴近目标语读者习惯";
+    if (value >= 7) return "偏向异化：保留源语文化特色和异域风情";
+    return "中立模式：视具体情况灵活处理";
+  };
 
   return (
     <div className="space-y-6">
@@ -346,190 +325,134 @@ export function SpecTranslation() {
             </CardContent>
           </Card>
 
-          {/* Translation Theories */}
+          {/* Translation Theory - 下拉框选择 */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">翻译理论</CardTitle>
               <CardDescription>
-                选择并配置要应用的翻译理论（可多选）
+                选择翻译理论并配置相关参数
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {theoryDefinitions.map((theory) => {
-                const config = blueprint.theories[theory.id];
-                const isExpanded = expandedTheories.has(theory.id);
-
-                return (
-                  <div
-                    key={theory.id}
-                    className={cn(
-                      "border rounded-lg transition-colors",
-                      config.enabled
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    )}
-                  >
-                    {/* Theory Header */}
-                    <div className="flex items-center justify-between p-3">
-                      <div className="flex items-center space-x-3">
-                        <Switch
-                          checked={config.enabled}
-                          onCheckedChange={(enabled) =>
-                            updateTheory(theory.id, { enabled })
-                          }
-                        />
-                        <div>
-                          <div className="font-medium text-sm">{theory.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {theory.description}
-                          </div>
-                        </div>
+            <CardContent className="space-y-4">
+              <Select
+                value={blueprint.selectedTheory}
+                onValueChange={handleTheoryChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {theoryDefinitions.map((theory) => (
+                    <SelectItem key={theory.id} value={theory.id}>
+                      <div className="flex flex-col items-start">
+                        <span>{theory.name} ({theory.englishName})</span>
+                        <span className="text-xs text-muted-foreground">
+                          {theory.description}
+                        </span>
                       </div>
-                      {config.enabled && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleTheoryExpand(theory.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* 理论具体配置 */}
+              {currentTheory && currentTheory.fields.length > 0 && (
+                <div className="space-y-3 pt-2 border-t">
+                  {currentTheory.fields.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <Label className="text-sm">{field.label}</Label>
+                      {field.type === "select" && "options" in field ? (
+                        <Select
+                          value={blueprint.theoryConfig[field.key] || ""}
+                          onValueChange={(v) => updateTheoryConfig(field.key, v)}
                         >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : field.type === "textarea" ? (
+                        <Textarea
+                          placeholder={"placeholder" in field ? field.placeholder : ""}
+                          className="min-h-[80px] resize-none text-sm"
+                          value={blueprint.theoryConfig[field.key] || ""}
+                          onChange={(e) => updateTheoryConfig(field.key, e.target.value)}
+                        />
+                      ) : (
+                        <Input
+                          placeholder={"placeholder" in field ? field.placeholder : ""}
+                          value={blueprint.theoryConfig[field.key] || ""}
+                          onChange={(e) => updateTheoryConfig(field.key, e.target.value)}
+                        />
                       )}
                     </div>
-
-                    {/* Theory Config (Expanded) */}
-                    {config.enabled && isExpanded && (
-                      <div className="px-3 pb-3 pt-0 space-y-3 border-t">
-                        <div className="pt-3 space-y-2">
-                          <Label className="text-xs">额外提示词</Label>
-                          <Input
-                            placeholder={theory.promptPlaceholder}
-                            value={config.prompt}
-                            onChange={(e) =>
-                              updateTheory(theory.id, { prompt: e.target.value })
-                            }
-                          />
-                        </div>
-
-                        {theory.extraFields?.map((field) => (
-                          <div key={field.key} className="space-y-2">
-                            <Label className="text-xs">{field.label}</Label>
-                            {field.type === "textarea" ? (
-                              <Textarea
-                                placeholder={field.placeholder}
-                                className="min-h-[80px] resize-none text-sm"
-                                value={config.extraData[field.key] || ""}
-                                onChange={(e) =>
-                                  updateTheoryExtraData(
-                                    theory.id,
-                                    field.key,
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            ) : (
-                              <Input
-                                placeholder={field.placeholder}
-                                value={config.extraData[field.key] || ""}
-                                onChange={(e) =>
-                                  updateTheoryExtraData(
-                                    theory.id,
-                                    field.key,
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Method Slider */}
+          {/* Method Slider - 1-10 并显示数字 */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">翻译方法</CardTitle>
               <CardDescription>
-                调整直译与意译的偏好程度
+                调整直译与意译的偏好程度 (1-10)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between text-sm text-muted-foreground">
-                <span>直译</span>
-                <span>平衡</span>
-                <span>意译</span>
+                <span>1 直译</span>
+                <span className="font-bold text-foreground text-lg">{blueprint.methodValue}</span>
+                <span>意译 10</span>
               </div>
               <Slider
-                value={[blueprint.methodSlider]}
+                value={[blueprint.methodValue]}
                 onValueChange={([value]) =>
-                  setBlueprint((prev) => ({ ...prev, methodSlider: value }))
+                  setBlueprint((prev) => ({ ...prev, methodValue: value }))
                 }
-                max={100}
+                min={1}
+                max={10}
                 step={1}
               />
-              <div className="text-center text-sm">
-                {blueprint.methodSlider < 33 ? (
-                  <span className="text-blue-600 dark:text-blue-400">
-                    偏向直译：尽量保持原文形式和结构
-                  </span>
-                ) : blueprint.methodSlider > 66 ? (
-                  <span className="text-purple-600 dark:text-purple-400">
-                    偏向意译：灵活处理，重视意义传达
-                  </span>
-                ) : (
-                  <span className="text-green-600 dark:text-green-400">
-                    平衡模式：兼顾形式与意义
-                  </span>
-                )}
-              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                {getMethodDescription(blueprint.methodValue)}
+              </p>
             </CardContent>
           </Card>
 
-          {/* Strategy Slider */}
+          {/* Strategy Slider - 1-10 并显示数字 */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">翻译策略</CardTitle>
               <CardDescription>
-                调整归化与异化的偏好程度
+                调整归化与异化的偏好程度 (1-10)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between text-sm text-muted-foreground">
-                <span>归化</span>
-                <span>中立</span>
-                <span>异化</span>
+                <span>1 归化</span>
+                <span className="font-bold text-foreground text-lg">{blueprint.strategyValue}</span>
+                <span>异化 10</span>
               </div>
               <Slider
-                value={[blueprint.strategySlider]}
+                value={[blueprint.strategyValue]}
                 onValueChange={([value]) =>
-                  setBlueprint((prev) => ({ ...prev, strategySlider: value }))
+                  setBlueprint((prev) => ({ ...prev, strategyValue: value }))
                 }
-                max={100}
+                min={1}
+                max={10}
                 step={1}
               />
-              <div className="text-center text-sm">
-                {blueprint.strategySlider < 40 ? (
-                  <span className="text-orange-600 dark:text-orange-400">
-                    偏向归化：使译文贴近目标语读者习惯
-                  </span>
-                ) : blueprint.strategySlider > 60 ? (
-                  <span className="text-teal-600 dark:text-teal-400">
-                    偏向异化：保留源语文化特色和异域风情
-                  </span>
-                ) : (
-                  <span className="text-gray-600 dark:text-gray-400">
-                    中立模式：视具体情况灵活处理
-                  </span>
-                )}
-              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                {getStrategyDescription(blueprint.strategyValue)}
+              </p>
             </CardContent>
           </Card>
 
@@ -656,34 +579,29 @@ export function SpecTranslation() {
             <CardContent>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">启用的理论:</span>
-                  <span>
-                    {Object.entries(blueprint.theories)
-                      .filter(([, c]) => c.enabled)
-                      .map(([id]) => theoryDefinitions.find((t) => t.id === id)?.name.split(" ")[0])
-                      .join("、") || "无"}
-                  </span>
+                  <span className="text-muted-foreground">翻译理论:</span>
+                  <span>{currentTheory?.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">翻译方法:</span>
                   <span>
-                    {blueprint.methodSlider < 33
+                    {blueprint.methodValue <= 3
                       ? "直译"
-                      : blueprint.methodSlider > 66
+                      : blueprint.methodValue >= 7
                       ? "意译"
                       : "平衡"}
-                    ({blueprint.methodSlider}%)
+                    ({blueprint.methodValue}/10)
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">翻译策略:</span>
                   <span>
-                    {blueprint.strategySlider < 40
+                    {blueprint.strategyValue <= 3
                       ? "归化"
-                      : blueprint.strategySlider > 60
+                      : blueprint.strategyValue >= 7
                       ? "异化"
                       : "中立"}
-                    ({blueprint.strategySlider}%)
+                    ({blueprint.strategyValue}/10)
                   </span>
                 </div>
               </div>
