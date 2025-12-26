@@ -21,6 +21,7 @@ import {
 import { useSettingsStore } from "../stores/settings";
 import { useTranslationStore } from "../stores/translation";
 import { easyTranslate, type EasyTranslateRequest } from "../api/translation";
+import { PageHeader } from "../components/layout/PageHeader";
 
 const languages = [
   { code: "auto", name: "自动检测" },
@@ -107,10 +108,7 @@ export function EasyTranslation() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">简易翻译</h1>
-        <p className="text-muted-foreground">快速翻译，支持自定义提示词</p>
-      </div>
+      <PageHeader title="简易翻译" description="快速翻译，支持自定义提示词" />
 
       {enabledEngines.length === 0 && (
         <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">

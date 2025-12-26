@@ -76,16 +76,28 @@ class SpecTranslationService(BaseTranslationService):
 
         # 理论框架决策
         theory_names = {
-            "equivalence": "对等理论 (Equivalence Theory)",
-            "functionalism": "功能主义 (Skopos Theory)",
-            "dts": "描述翻译学 (DTS)",
+            "equivalence": "对等理论（动态对等）",
+            "functionalism": "功能主义（目的论）",
+            "dts": "描述翻译学（DTS）",
         }
-        theory_id = blueprint.theory.get("primary", "equivalence")
+        enabled_theories: list[str] = []
+        theory_group = getattr(blueprint, "theory", None)
+        for cfg in getattr(theory_group, "configs", []) or []:
+            if getattr(cfg, "enabled", False):
+                name = theory_names.get(getattr(cfg, "id", ""), getattr(cfg, "id", ""))
+                if name:
+                    enabled_theories.append(name)
+        theory_id = getattr(theory_group, "primary", None)
+        if not enabled_theories and theory_id:
+            enabled_theories = [theory_names.get(theory_id, theory_id)]
+        theory_decision = (
+            "、".join(enabled_theories) if enabled_theories else "未启用（仅按方法/策略执行）"
+        )
         decisions.append(
             TranslationDecision(
                 aspect="理论框架",
-                decision=theory_names.get(theory_id, theory_id),
-                rationale="基于所选理论框架指导整体翻译方向",
+                decision=theory_decision,
+                rationale="基于已启用的理论分块指导整体翻译方向",
             )
         )
 
@@ -94,9 +106,11 @@ class SpecTranslationService(BaseTranslationService):
             "literal": "直译",
             "free": "意译",
             "balanced": "平衡",
+            "adaptation": "改编",
         }
-        method_pref = blueprint.method.get("preference", "balanced")
-        method_weight = blueprint.method.get("weight", 0.5)
+        method_cfg = getattr(blueprint, "method", None)
+        method_pref = getattr(method_cfg, "preference", "balanced")
+        method_weight = getattr(method_cfg, "weight", 0.5)
         decisions.append(
             TranslationDecision(
                 aspect="翻译方法",
@@ -110,8 +124,9 @@ class SpecTranslationService(BaseTranslationService):
             "domestication": "归化",
             "foreignization": "异化",
         }
-        strategy_approach = blueprint.strategy.get("approach", "domestication")
-        strategy_weight = blueprint.strategy.get("weight", 0.5)
+        strategy_cfg = getattr(blueprint, "strategy", None)
+        strategy_approach = getattr(strategy_cfg, "approach", "domestication")
+        strategy_weight = getattr(strategy_cfg, "weight", 0.5)
         decisions.append(
             TranslationDecision(
                 aspect="翻译策略",

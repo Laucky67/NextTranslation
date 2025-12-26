@@ -25,6 +25,7 @@ import {
   type EngineInstance,
 } from "../stores/settings";
 import { cn } from "../lib/utils";
+import { PageHeader } from "../components/layout/PageHeader";
 
 const channelOptions: { value: EngineChannel; label: string; description: string }[] = [
   { value: "openai", label: "OpenAI 兼容", description: "支持 OpenAI API 格式的服务" },
@@ -139,10 +140,7 @@ export function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold">设置</h1>
-        <p className="text-muted-foreground">管理翻译引擎配置和偏好设置</p>
-      </div>
+      <PageHeader title="设置" description="管理翻译引擎配置和偏好设置" />
 
       {/* Engines List */}
       <Card>

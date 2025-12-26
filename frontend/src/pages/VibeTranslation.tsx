@@ -28,6 +28,7 @@ import {
   type EngineConfig,
 } from "../api/translation";
 import { cn } from "../lib/utils";
+import { PageHeader } from "../components/layout/PageHeader";
 
 const languages = [
   { code: "auto", name: "自动检测" },
@@ -175,12 +176,10 @@ export function VibeTranslation() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">氛围翻译</h1>
-        <p className="text-muted-foreground">
-          多引擎并行翻译，智能评分推荐最佳结果
-        </p>
-      </div>
+      <PageHeader
+        title="氛围翻译"
+        description="多引擎并行翻译，智能评分推荐最佳结果"
+      />
 
       {!hasEngines && (
         <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
@@ -300,7 +299,7 @@ export function VibeTranslation() {
                   <SelectValue placeholder="选择裁判引擎" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">自动（优先 OpenAI）</SelectItem>
+                  <SelectItem value="auto">自动</SelectItem>
                   {enabledEngines.map((engine) => (
                     <SelectItem key={engine.id} value={engine.id}>
                       {engine.name}

@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Literal
+from __future__ import annotations
 
+from pydantic import BaseModel, Field
+
+from app.models.blueprint import TranslationBlueprint
 
 class EasyTranslateRequest(BaseModel):
     """简易翻译请求"""
@@ -73,32 +75,6 @@ class VibeTranslateResponse(BaseModel):
     best_result: ScoredEngineResult | None = None
     synthesized_translation: str | None = None
     synthesis_rationale: str | None = None
-
-
-class TranslationBlueprint(BaseModel):
-    """翻译蓝图"""
-
-    theory: dict = Field(
-        default_factory=lambda: {"primary": "equivalence", "emphasis": []},
-        description="翻译理论配置",
-    )
-    method: dict = Field(
-        default_factory=lambda: {"preference": "literal", "weight": 0.5},
-        description="翻译方法配置",
-    )
-    strategy: dict = Field(
-        default_factory=lambda: {"approach": "domestication", "weight": 0.5},
-        description="翻译策略配置",
-    )
-    techniques: dict = Field(
-        default_factory=lambda: {
-            "useTerminology": False,
-            "terminologySource": None,
-            "extractTerms": False,
-        },
-        description="翻译技巧配置",
-    )
-    context: str = Field(default="", description="额外上下文说明")
 
 
 class SpecTranslateRequest(BaseModel):

@@ -11,6 +11,7 @@ from app.models.translation import (
     SpecTranslateRequest,
     SpecTranslateResponse,
 )
+from app.models.blueprint import SpecBlueprintRequest, SpecBlueprintResponse
 from app.dependencies import (
     EngineConfig,
     get_engine_config,
@@ -20,6 +21,7 @@ from app.dependencies import (
 from app.services.translation.easy import EasyTranslationService
 from app.services.translation.vibe import VibeTranslationService
 from app.services.translation.spec import SpecTranslationService
+from app.services.translation.spec_blueprint import SpecBlueprintService
 from app.sse import sse_event
 
 router = APIRouter(prefix="/translate", tags=["translation"])
@@ -159,3 +161,14 @@ async def spec_translate(
     """
     service = SpecTranslationService()
     return await service.translate(request, engine_config)
+
+
+@router.post("/spec/blueprint", response_model=SpecBlueprintResponse)
+async def spec_generate_blueprint(
+    request: SpecBlueprintRequest,
+    engine_config: EngineConfig = Depends(get_engine_config),
+):
+    """生成 Spec Translation 蓝图（提示词分块 + 理论建议/分析）"""
+    service = SpecBlueprintService()
+    blueprint = await service.generate_blueprint(request, engine_config)
+    return SpecBlueprintResponse(blueprint=blueprint)

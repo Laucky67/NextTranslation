@@ -1,5 +1,14 @@
 """Models module"""
 
+from app.models.blueprint import (
+    DTSTheoryConfig,
+    EquivalenceTheoryConfig,
+    FunctionalismTheoryConfig,
+    PromptBlock,
+    SpecBlueprintRequest,
+    SpecBlueprintResponse,
+    TranslationBlueprint,
+)
 from app.models.translation import (
     EasyTranslateRequest,
     EasyTranslateResponse,
@@ -7,7 +16,6 @@ from app.models.translation import (
     VibeTranslateResponse,
     SpecTranslateRequest,
     SpecTranslateResponse,
-    TranslationBlueprint,
     TranslationDecision,
     TranslationScore,
     ScoredEngineResult,
@@ -21,7 +29,13 @@ __all__ = [
     "VibeTranslateResponse",
     "SpecTranslateRequest",
     "SpecTranslateResponse",
+    "SpecBlueprintRequest",
+    "SpecBlueprintResponse",
     "TranslationBlueprint",
+    "PromptBlock",
+    "EquivalenceTheoryConfig",
+    "FunctionalismTheoryConfig",
+    "DTSTheoryConfig",
     "TranslationDecision",
     "TranslationScore",
     "ScoredEngineResult",

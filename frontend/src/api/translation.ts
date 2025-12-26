@@ -52,56 +52,6 @@ export interface VibeTranslateResponse {
   synthesis_rationale?: string;
 }
 
-// 扩展的翻译蓝图，支持多理论配置
-export interface TranslationBlueprint {
-  theory: {
-    primary: string;
-    emphasis: string[];
-    configs?: Array<{
-      id: string;
-      prompt?: string;
-      [key: string]: unknown;
-    }>;
-  };
-  method: {
-    preference: "literal" | "free" | "balanced" | "adaptation";
-    weight: number;
-  };
-  strategy: {
-    approach: "domestication" | "foreignization";
-    weight: number;
-  };
-  techniques: {
-    useTerminology: boolean;
-    terminologySource?: string;
-    extractTerms: boolean;
-  };
-  context: string;
-}
-
-export interface SpecTranslateRequest {
-  text: string;
-  source_lang: string;
-  target_lang: string;
-  blueprint: TranslationBlueprint;
-  engine?: string;
-}
-
-export interface TranslationDecision {
-  aspect: string;
-  decision: string;
-  rationale: string;
-}
-
-export interface SpecTranslateResponse {
-  translated_text: string;
-  source_lang: string;
-  target_lang: string;
-  blueprint_applied: TranslationBlueprint;
-  decisions?: TranslationDecision[];
-  extracted_terms?: Record<string, string>[];
-}
-
 export interface EngineInfo {
   id: string;
   name: string;
@@ -198,13 +148,6 @@ export async function vibeTranslateStream(
     throw new Error("未收到最终翻译结果");
   }
   return finalResponse;
-}
-
-export async function specTranslate(
-  request: SpecTranslateRequest,
-  engineConfig: EngineConfig
-): Promise<SpecTranslateResponse> {
-  return apiClient.post("/api/translate/spec", request, { engineConfig });
 }
 
 export async function getEngines(): Promise<{ engines: EngineInfo[] }> {
