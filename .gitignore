@@ -1,0 +1,10 @@
+#openspec
+openspec
+
+#依赖
+node_modules
+
+#AI助手
+.claude
+AGENTS.md
+CLAUDE.md
