@@ -1,0 +1,15 @@
+[project]
+name = "nexttranslation-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.75.0",
+    "fastapi>=0.127.0",
+    "httpx>=0.28.1",
+    "openai>=2.14.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "uvicorn[standard]>=0.40.0",
+]
