@@ -8,3 +8,16 @@ node_modules
 .claude
 AGENTS.md
 CLAUDE.md
+
+#后端缓存文件
+*.pyc
+
+##IDE配置
+.vscode
+
+#node
+*.lock
+bun.lock
+
+#前端编译
+dist
