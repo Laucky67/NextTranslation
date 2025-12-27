@@ -43,7 +43,6 @@ export interface TranslationHistoryItem {
 export interface TranslationHistoryProps {
   items: TranslationHistoryItem[];
   mode?: "easy" | "vibe" | "spec";
-  onCopy: (text: string) => void;
   onDelete: (id: string) => void;
   onClear: () => void;
   maxItems?: number;
