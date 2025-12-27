@@ -1,8 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Copy, Loader2, Star, Trophy } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
+import { Star, Trophy } from "lucide-react";
 import { Input } from "../components/ui/input";
 import {
   Card,
@@ -11,49 +9,40 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
 import { useSettingsStore } from "../stores/settings";
 import { useTranslationStore } from "../stores/translation";
 import {
   vibeTranslateStream,
   type VibeTranslateRequest,
   type VibeTranslateResponse,
-  type ScoredEngineResult,
   type EngineConfig,
 } from "../api/translation";
-import { cn } from "../lib/utils";
 import { PageHeader } from "../components/layout/PageHeader";
-
-const languages = [
-  { code: "auto", name: "自动检测" },
-  { code: "zh", name: "中文" },
-  { code: "en", name: "英语" },
-  { code: "ja", name: "日语" },
-  { code: "ko", name: "韩语" },
-  { code: "fr", name: "法语" },
-  { code: "de", name: "德语" },
-  { code: "es", name: "西班牙语" },
-];
+import { LoadingButton, WarningAlert } from "../components/common";
+import {
+  LanguageSelector,
+  TranslationTextArea,
+  EngineMultiSelect,
+  EngineSelector,
+  ResultCard
+} from "../components/features/translation";
+import { useLanguageSelector, useEngineConfig, useCopyToClipboard } from "../hooks";
+import { LANGUAGES } from "../lib/constants";
 
 export function VibeTranslation() {
-  const { engines, getEnabledEngines } = useSettingsStore();
+  const { engines } = useSettingsStore();
   const { addToHistory } = useTranslationStore();
 
+  // 使用自定义Hooks
+  const { sourceLang, targetLang, setSourceLang, setTargetLang } = useLanguageSelector();
+  const { enabledEngines, hasEngine } = useEngineConfig();
+  const { copy } = useCopyToClipboard();
+
   const [sourceText, setSourceText] = useState("");
-  const [sourceLang, setSourceLang] = useState("auto");
-  const [targetLang, setTargetLang] = useState("zh");
   const [intent, setIntent] = useState("");
   const [selectedEngineIds, setSelectedEngineIds] = useState<string[]>([]);
   const [judgeEngineId, setJudgeEngineId] = useState<string>("auto");
   const [result, setResult] = useState<VibeTranslateResponse | null>(null);
-
-  const enabledEngines = getEnabledEngines();
 
   const mutation = useMutation({
     mutationFn: async (request: VibeTranslateRequest) => {
@@ -156,11 +145,6 @@ export function VibeTranslation() {
     );
   };
 
-  const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-  };
-
-  const hasEngines = enabledEngines.length > 0;
   const hasSelectedEngines = selectedEngineIds.length > 0;
   const topScoreEngineId = (() => {
     if (!result?.results?.length) return null;
@@ -181,14 +165,8 @@ export function VibeTranslation() {
         description="多引擎并行翻译，智能评分推荐最佳结果"
       />
 
-      {!hasEngines && (
-        <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
-          <CardContent className="pt-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              请先在设置页面配置并启用至少一个翻译引擎
-            </p>
-          </CardContent>
-        </Card>
+      {!hasEngine && (
+        <WarningAlert message="请先在设置页面配置并启用至少一个翻译引擎" />
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -196,42 +174,22 @@ export function VibeTranslation() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center space-x-4">
-                <Select value={sourceLang} onValueChange={setSourceLang}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languages.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        {lang.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-muted-foreground">→</span>
-                <Select value={targetLang} onValueChange={setTargetLang}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languages
-                      .filter((l) => l.code !== "auto")
-                      .map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <LanguageSelector
+                sourceLang={sourceLang}
+                targetLang={targetLang}
+                onSourceChange={setSourceLang}
+                onTargetChange={setTargetLang}
+                languages={LANGUAGES}
+                showSwap={false}
+              />
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                placeholder="输入要翻译的文本..."
-                className="min-h-[150px] resize-none"
+              <TranslationTextArea
                 value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
+                onChange={setSourceText}
+                placeholder="输入要翻译的文本..."
+                onCopy={copy}
+                minHeight="150px"
               />
             </CardContent>
           </Card>
@@ -265,23 +223,11 @@ export function VibeTranslation() {
                   没有可用的引擎，请先在设置页面配置
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {enabledEngines.map((engine) => (
-                    <Button
-                      key={engine.id}
-                      variant={
-                        selectedEngineIds.includes(engine.id)
-                          ? "default"
-                          : "outline"
-                      }
-                      size="sm"
-                      onClick={() => toggleEngine(engine.id)}
-                    >
-                      {engine.name}
-                      {engine.model && ` (${engine.model})`}
-                    </Button>
-                  ))}
-                </div>
+                <EngineMultiSelect
+                  engines={enabledEngines}
+                  selected={selectedEngineIds}
+                  onToggle={toggleEngine}
+                />
               )}
             </CardContent>
           </Card>
@@ -290,47 +236,31 @@ export function VibeTranslation() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">裁判模型</CardTitle>
               <CardDescription>
-                选择用于打分与综合生成“综合推荐”的引擎/模型
+                选择用于打分与综合生成"综合推荐"的引擎/模型
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Select value={judgeEngineId} onValueChange={setJudgeEngineId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择裁判引擎" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">自动</SelectItem>
-                  {enabledEngines.map((engine) => (
-                    <SelectItem key={engine.id} value={engine.id}>
-                      {engine.name}
-                      {engine.model && ` (${engine.model})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EngineSelector
+                engines={[
+                  { id: "auto", name: "自动", channel: "openai" as const, apiKey: "", baseUrl: "", enabled: true },
+                  ...enabledEngines
+                ]}
+                value={judgeEngineId}
+                onChange={setJudgeEngineId}
+                placeholder="选择裁判引擎"
+              />
             </CardContent>
           </Card>
 
-          <Button
+          <LoadingButton
             className="w-full"
             size="lg"
             onClick={handleTranslate}
-            disabled={
-              !sourceText.trim() ||
-              !intent.trim() ||
-              !hasSelectedEngines ||
-              mutation.isPending
-            }
+            disabled={!sourceText.trim() || !intent.trim() || !hasSelectedEngines}
+            loading={mutation.isPending}
           >
-            {mutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                翻译中...
-              </>
-            ) : (
-              "开始翻译"
-            )}
-          </Button>
+            开始翻译
+          </LoadingButton>
         </div>
 
         {/* Results Section */}
@@ -378,19 +308,16 @@ export function VibeTranslation() {
                       <Star className="h-4 w-4 text-yellow-500 mr-1" />
                       {result.best_result.score.overall.toFixed(1)}
                     </span>
-                    <Button
+                    <LoadingButton
                       variant="ghost"
                       size="sm"
-                      onClick={() =>
-                        handleCopy(
-                          result.synthesized_translation ||
-                            result.best_result!.translated_text
-                        )
-                      }
+                      onClick={() => {
+                        const text = result.synthesized_translation || result.best_result!.translated_text;
+                        copy(text);
+                      }}
                     >
-                      <Copy className="h-3 w-3 mr-1" />
                       复制
-                    </Button>
+                    </LoadingButton>
                   </div>
                 )}
               </CardContent>
@@ -405,7 +332,7 @@ export function VibeTranslation() {
                   key={r.engine_id}
                   result={r}
                   isTopScore={r.engine_id === topScoreEngineId}
-                  onCopy={handleCopy}
+                  onCopy={copy}
                 />
               ))}
             </div>
@@ -425,94 +352,6 @@ export function VibeTranslation() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ResultCard({
-  result,
-  isTopScore,
-  onCopy,
-}: {
-  result: ScoredEngineResult;
-  isTopScore: boolean;
-  onCopy: (text: string) => void;
-}) {
-  if (!result.success) {
-    return (
-      <Card className="border-destructive/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">{result.engine_name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-destructive text-sm">失败: {result.error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card
-      className={cn(
-        isTopScore && "border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
-      )}
-    >
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{result.engine_name}</CardTitle>
-          <div className="flex items-center space-x-2 text-sm">
-            {isTopScore && (
-              <span className="text-yellow-700 dark:text-yellow-300">
-                分数最高
-              </span>
-            )}
-            {result.score && (
-              <div className="flex items-center">
-                <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                {result.score.overall.toFixed(1)}
-              </div>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm whitespace-pre-wrap">{result.translated_text}</p>
-
-        {result.score && (
-          <div className="grid grid-cols-4 gap-2 text-xs">
-            <ScoreItem label="准确性" value={result.score.accuracy} />
-            <ScoreItem label="流畅度" value={result.score.fluency} />
-            <ScoreItem label="风格" value={result.score.style_match} />
-            <ScoreItem label="术语" value={result.score.terminology} />
-          </div>
-        )}
-
-        {result.score?.comment && (
-          <p className="text-xs text-muted-foreground">
-            评语：{result.score.comment}
-          </p>
-        )}
-
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onCopy(result.translated_text)}
-          >
-            <Copy className="h-3 w-3 mr-1" />
-            复制
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ScoreItem({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="text-center">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="font-medium">{value.toFixed(1)}</div>
     </div>
   );
 }
