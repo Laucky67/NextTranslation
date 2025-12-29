@@ -31,22 +31,28 @@ export interface EngineFormData {
 
 export interface EngineFormProps {
   formData: EngineFormData;
-  onChange: (data: EngineFormData) => void;
-  showApiKey?: boolean;
-  onToggleApiKey?: () => void;
-  mode?: "add" | "edit";
+  setFormData: React.Dispatch<React.SetStateAction<EngineFormData>>;
+  onChannelChange: (channel: EngineChannel) => void;
+  showApiKey: boolean;
+  onToggleApiKey: () => void;
   className?: string;
 }
 
 export interface EngineCardProps {
   engine: EngineInstance;
-  isDefault?: boolean;
-  showApiKey?: boolean;
+  isDefault: boolean;
+  isEditing: boolean;
+  showApiKey: boolean;
+  formData?: EngineFormData;
   onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
   onDelete: () => void;
   onToggleEnabled: (enabled: boolean) => void;
   onSetDefault: () => void;
   onToggleApiKey: () => void;
+  setFormData?: React.Dispatch<React.SetStateAction<EngineFormData>>;
+  onChannelChange?: (channel: EngineChannel) => void;
   className?: string;
 }
 

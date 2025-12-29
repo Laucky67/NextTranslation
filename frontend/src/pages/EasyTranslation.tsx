@@ -1,8 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { ArrowRightLeft, Trash2 } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
+import { useState } from "react";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import {
@@ -11,29 +8,24 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
 import { useTranslationStore } from "../stores/translation";
 import { easyTranslate, type EasyTranslateRequest } from "../api/translation";
 import { PageHeader } from "../components/layout/PageHeader";
-import { CopyButton, LoadingButton, WarningAlert, ErrorAlert } from "../components/common";
-import { useLanguageSelector, useEngineConfig } from "../hooks";
-import { LANGUAGES, TARGET_LANGUAGES } from "../lib/constants";
+import { LoadingButton, WarningAlert } from "../components/common";
+import { LanguageSelector, TranslationTextArea, EngineSelector, TranslationHistory } from "../components/features/translation";
+import { useLanguageSelector, useEngineConfig, useCopyToClipboard } from "../hooks";
+import { LANGUAGES } from "../lib/constants";
 
 export function EasyTranslation() {
   const { history, addToHistory, clearHistory, removeFromHistory } =
     useTranslationStore();
 
   // 使用自定义Hooks
-  const { sourceLang, targetLang, setSourceLang, setTargetLang, swapLanguages, canSwap } =
+  const { sourceLang, targetLang, setSourceLang, setTargetLang, swapLanguages } =
     useLanguageSelector();
   const { enabledEngines, selectedEngineId, selectedEngine, setSelectedEngineId, hasEngine } =
     useEngineConfig();
+  const { copy } = useCopyToClipboard();
 
   const [sourceText, setSourceText] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
@@ -75,18 +67,11 @@ export function EasyTranslation() {
   };
 
   const handleSwapLanguages = () => {
-    if (canSwap) {
-      swapLanguages();
-      // 交换文本内容
-      setSourceText(translatedText);
-      setTranslatedText(sourceText);
-    }
+    swapLanguages();
+    // 交换文本内容
+    setSourceText(translatedText);
+    setTranslatedText(sourceText);
   };
-
-  const easyHistory = useMemo(
-    () => history.filter((item) => item.mode === "easy").slice(0, 10),
-    [history]
-  );
 
   return (
     <div className="space-y-6">
@@ -100,52 +85,23 @@ export function EasyTranslation() {
         {/* Source */}
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <Select value={sourceLang} onValueChange={setSourceLang}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGES.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleSwapLanguages}
-                disabled={!canSwap}
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-              </Button>
-              <Select value={targetLang} onValueChange={setTargetLang}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TARGET_LANGUAGES.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <LanguageSelector
+              sourceLang={sourceLang}
+              targetLang={targetLang}
+              onSourceChange={setSourceLang}
+              onTargetChange={setTargetLang}
+              onSwap={handleSwapLanguages}
+              languages={LANGUAGES}
+            />
           </CardHeader>
           <CardContent className="space-y-4">
-            <Textarea
-              placeholder="输入要翻译的文本..."
-              className="min-h-[200px] resize-none"
+            <TranslationTextArea
               value={sourceText}
-              onChange={(e) => setSourceText(e.target.value)}
+              onChange={setSourceText}
+              placeholder="输入要翻译的文本..."
+              onCopy={copy}
+              minHeight="200px"
             />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{sourceText.length} 字符</span>
-              <CopyButton text={sourceText} />
-            </div>
           </CardContent>
         </Card>
 
@@ -155,24 +111,14 @@ export function EasyTranslation() {
             <CardTitle className="text-base">翻译结果</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="min-h-[200px] rounded-md border bg-muted/50 p-3">
-              {mutation.isPending ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-muted-foreground">翻译中...</div>
-                </div>
-              ) : (
-                <p className="whitespace-pre-wrap">
-                  {translatedText || "翻译结果将显示在这里"}
-                </p>
-              )}
-            </div>
-            {mutation.isError && (
-              <ErrorAlert error={mutation.error} title="翻译失败" />
-            )}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{translatedText.length} 字符</span>
-              <CopyButton text={translatedText} />
-            </div>
+            <TranslationTextArea
+              value={translatedText}
+              onChange={setTranslatedText}
+              placeholder={mutation.isPending ? "翻译中..." : "翻译结果将显示在这里"}
+              onCopy={copy}
+              readOnly
+              minHeight="200px"
+            />
           </CardContent>
         </Card>
       </div>
@@ -186,19 +132,12 @@ export function EasyTranslation() {
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label>翻译引擎</Label>
-              <Select value={selectedEngineId} onValueChange={setSelectedEngineId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择引擎" />
-                </SelectTrigger>
-                <SelectContent>
-                  {enabledEngines.map((engine) => (
-                    <SelectItem key={engine.id} value={engine.id}>
-                      {engine.name}
-                      {engine.model && ` (${engine.model})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EngineSelector
+                engines={enabledEngines}
+                value={selectedEngineId}
+                onChange={setSelectedEngineId}
+                placeholder="选择引擎"
+              />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>自定义提示词（可选）</Label>
@@ -225,47 +164,12 @@ export function EasyTranslation() {
       </div>
 
       {/* History */}
-      {easyHistory.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">最近翻译</CardTitle>
-              <Button variant="ghost" size="sm" onClick={clearHistory}>
-                <Trash2 className="h-3 w-3 mr-1" />
-                清空
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {easyHistory.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between p-3 rounded-md border bg-muted/30 text-sm"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-muted-foreground">
-                      {item.sourceText}
-                    </p>
-                    <p className="truncate font-medium">{item.translatedText}</p>
-                  </div>
-                  <div className="flex items-center space-x-1 ml-2">
-                    <CopyButton text={item.translatedText} />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => removeFromHistory(item.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <TranslationHistory
+        items={history}
+        mode="easy"
+        onDelete={removeFromHistory}
+        onClear={clearHistory}
+      />
     </div>
   );
 }

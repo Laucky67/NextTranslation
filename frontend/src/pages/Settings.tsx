@@ -1,44 +1,12 @@
 import { useState } from "react";
-import { Eye, EyeOff, Plus, Trash2, Star, StarOff, Pencil, Check, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import { Combobox } from "../components/ui/combobox";
-import {
-  useSettingsStore,
-  channelDefaults,
-  type EngineChannel,
-  type EngineInstance,
-} from "../stores/settings";
-import { cn } from "../lib/utils";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { useSettingsStore, channelDefaults, type EngineChannel } from "../stores/settings";
 import { PageHeader } from "../components/layout/PageHeader";
-
-const channelOptions: { value: EngineChannel; label: string; description: string }[] = [
-  { value: "openai", label: "OpenAI 兼容", description: "支持 OpenAI API 格式的服务" },
-  { value: "anthropic", label: "Anthropic 兼容", description: "支持 Anthropic API 格式的服务" },
-];
-
-interface EngineFormData {
-  name: string;
-  channel: EngineChannel;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}
+import { EmptyState, ConfirmDialog } from "../components/common";
+import { EngineForm, EngineCard } from "../components/features/settings";
+import type { EngineFormData } from "../types";
 
 const defaultFormData: EngineFormData = {
   name: "",
@@ -62,6 +30,10 @@ export function Settings() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<EngineFormData>(defaultFormData);
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    engineId: string | null;
+  }>({ open: false, engineId: null });
 
   const toggleShowApiKey = (id: string) => {
     setShowApiKeys((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -93,8 +65,11 @@ export function Settings() {
     setShowAddForm(false);
   };
 
-  const handleStartEdit = (engine: EngineInstance) => {
-    setEditingId(engine.id);
+  const handleStartEdit = (engineId: string) => {
+    const engine = engines.find((e) => e.id === engineId);
+    if (!engine) return;
+
+    setEditingId(engineId);
     setFormData({
       name: engine.name,
       channel: engine.channel,
@@ -132,10 +107,19 @@ export function Settings() {
     setDefaultEngine(id === defaultEngineId ? null : id);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("确定要删除这个引擎配置吗？")) {
-      removeEngine(id);
+  const handleDeleteClick = (id: string) => {
+    setDeleteConfirm({ open: true, engineId: id });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm.engineId) {
+      removeEngine(deleteConfirm.engineId);
     }
+    setDeleteConfirm({ open: false, engineId: null });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ open: false, engineId: null });
   };
 
   return (
@@ -202,134 +186,30 @@ export function Settings() {
 
           {/* Engine List */}
           {engines.length === 0 && !showAddForm ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>还没有配置任何翻译引擎</p>
-              <p className="text-sm">点击上方"添加引擎"按钮开始配置</p>
-            </div>
+            <EmptyState
+              title="还没有配置任何翻译引擎"
+              description="点击上方「添加引擎」按钮开始配置"
+            />
           ) : (
             <div className="space-y-3">
               {engines.map((engine) => (
-                <Card
+                <EngineCard
                   key={engine.id}
-                  className={cn(
-                    "transition-colors",
-                    !engine.enabled && "opacity-60",
-                    engine.id === defaultEngineId && "ring-2 ring-primary"
-                  )}
-                >
-                  {editingId === engine.id ? (
-                    // Edit Mode
-                    <CardContent className="pt-4 space-y-4">
-                      <EngineForm
-                        formData={formData}
-                        setFormData={setFormData}
-                        onChannelChange={handleChannelChange}
-                        showApiKey={showApiKeys[engine.id]}
-                        onToggleApiKey={() => toggleShowApiKey(engine.id)}
-                      />
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" size="sm" onClick={handleCancelEdit}>
-                          <X className="h-4 w-4 mr-1" />
-                          取消
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveEdit(engine.id)}
-                          disabled={!formData.name.trim() || !formData.apiKey.trim()}
-                        >
-                          <Check className="h-4 w-4 mr-1" />
-                          保存
-                        </Button>
-                      </div>
-                    </CardContent>
-                  ) : (
-                    // View Mode
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium">{engine.name}</span>
-                            {engine.id === defaultEngineId && (
-                              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
-                                默认
-                              </span>
-                            )}
-                            {!engine.enabled && (
-                              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
-                                已禁用
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-muted-foreground space-y-0.5">
-                            <p>
-                              渠道: {channelOptions.find((c) => c.value === engine.channel)?.label}
-                            </p>
-                            <p>Base URL: {engine.baseUrl}</p>
-                            {engine.model && <p>模型: {engine.model}</p>}
-                            <p>
-                              API Key: {showApiKeys[engine.id] ? engine.apiKey : "••••••••••••"}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 ml-1"
-                                onClick={() => toggleShowApiKey(engine.id)}
-                              >
-                                {showApiKeys[engine.id] ? (
-                                  <EyeOff className="h-3 w-3" />
-                                ) : (
-                                  <Eye className="h-3 w-3" />
-                                )}
-                              </Button>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleSetDefault(engine.id)}
-                            title={engine.id === defaultEngineId ? "取消默认" : "设为默认"}
-                          >
-                            {engine.id === defaultEngineId ? (
-                              <Star className="h-4 w-4 fill-current text-yellow-500" />
-                            ) : (
-                              <StarOff className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleEnabled(engine.id, !engine.enabled)}
-                            title={engine.enabled ? "禁用" : "启用"}
-                          >
-                            {engine.enabled ? (
-                              <Check className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <X className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStartEdit(engine)}
-                            title="编辑"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(engine.id)}
-                            title="删除"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
+                  engine={engine}
+                  isDefault={engine.id === defaultEngineId}
+                  isEditing={editingId === engine.id}
+                  showApiKey={showApiKeys[engine.id] || false}
+                  formData={editingId === engine.id ? formData : undefined}
+                  onEdit={() => handleStartEdit(engine.id)}
+                  onSave={() => handleSaveEdit(engine.id)}
+                  onCancel={handleCancelEdit}
+                  onDelete={() => handleDeleteClick(engine.id)}
+                  onToggleEnabled={(enabled) => handleToggleEnabled(engine.id, enabled)}
+                  onSetDefault={() => handleSetDefault(engine.id)}
+                  onToggleApiKey={() => toggleShowApiKey(engine.id)}
+                  setFormData={editingId === engine.id ? setFormData : undefined}
+                  onChannelChange={editingId === engine.id ? handleChannelChange : undefined}
+                />
               ))}
             </div>
           )}
@@ -348,111 +228,17 @@ export function Settings() {
           </p>
         </CardContent>
       </Card>
-    </div>
-  );
-}
 
-// Engine Form Component
-function EngineForm({
-  formData,
-  setFormData,
-  onChannelChange,
-  showApiKey,
-  onToggleApiKey,
-}: {
-  formData: EngineFormData;
-  setFormData: React.Dispatch<React.SetStateAction<EngineFormData>>;
-  onChannelChange: (channel: EngineChannel) => void;
-  showApiKey: boolean;
-  onToggleApiKey: () => void;
-}) {
-  const currentChannelDefaults = channelDefaults[formData.channel];
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="space-y-2">
-        <Label>名称</Label>
-        <Input
-          placeholder="例如: GPT-4o, Claude 3.5..."
-          value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>渠道类型</Label>
-        <Select value={formData.channel} onValueChange={onChannelChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {channelOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                <div className="flex flex-col">
-                  <span>{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2 sm:col-span-2">
-        <Label>API Key</Label>
-        <div className="relative">
-          <Input
-            type={showApiKey ? "text" : "password"}
-            placeholder="输入 API 密钥..."
-            value={formData.apiKey}
-            onChange={(e) => setFormData((prev) => ({ ...prev, apiKey: e.target.value }))}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 top-0 h-full px-3"
-            onClick={onToggleApiKey}
-          >
-            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Base URL</Label>
-        <Input
-          placeholder={currentChannelDefaults.baseUrl}
-          value={formData.baseUrl}
-          onChange={(e) => setFormData((prev) => ({ ...prev, baseUrl: e.target.value }))}
-        />
-        <p className="text-xs text-muted-foreground">
-          默认: {currentChannelDefaults.baseUrl}
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label>模型</Label>
-        {currentChannelDefaults.models.length > 0 ? (
-          <Combobox
-            options={currentChannelDefaults.models.map((m) => ({ value: m, label: m }))}
-            value={formData.model}
-            onChange={(v) => setFormData((prev) => ({ ...prev, model: v }))}
-            placeholder="选择或输入模型名"
-            allowCustom={true}
-            customPlaceholder="输入自定义模型名..."
-          />
-        ) : (
-          <Input
-            placeholder="输入模型名（可选）"
-            value={formData.model}
-            onChange={(e) => setFormData((prev) => ({ ...prev, model: e.target.value }))}
-          />
-        )}
-        <p className="text-xs text-muted-foreground">
-          可选择预设模型或输入自定义模型名
-        </p>
-      </div>
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="确认删除"
+        message="确定要删除这个引擎配置吗？"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        confirmText="删除"
+        cancelText="取消"
+      />
     </div>
   );
 }
