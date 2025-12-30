@@ -65,7 +65,7 @@ NextTranslation 是一个现代化的全栈翻译平台，提供多种翻译模�
 ### 1. 克隆项目
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/Laucky67/NextTranslation
 cd NextTranslation
 ```
 
